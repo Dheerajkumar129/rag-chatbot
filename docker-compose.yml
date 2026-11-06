@@ -1,0 +1,16 @@
+services:
+  rag-chatbot:
+    build: .
+    container_name: rag-chatbot
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      - CHUNK_SIZE=800
+      - CHUNK_OVERLAP=150
+      - TOP_K_RESULTS=4
+    volumes:
+      - ./app/data:/app/app/data
+    restart: unless-stopped

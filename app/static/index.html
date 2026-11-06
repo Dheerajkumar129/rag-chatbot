@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FastAPI RAG Chatbot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <!-- Marked.js for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar: Knowledge Base & Document Management -->
+    <aside class="sidebar">
+      <div class="brand-header">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>RAG Intelligence</h1>
+          <span class="brand-badge">FastAPI &bull; ChromaDB</span>
+        </div>
+      </div>
+
+      <!-- System Status Card -->
+      <div class="status-card" id="statusCard">
+        <div class="status-header">
+          <span class="status-indicator online" id="statusDot"></span>
+          <span class="status-label" id="statusLabel">Connecting...</span>
+        </div>
+        <div class="status-details">
+          <div class="stat-item">
+            <span class="stat-name">Vector Chunks</span>
+            <span class="stat-value" id="statChunks">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-name">Documents</span>
+            <span class="stat-value" id="statDocs">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-name">Active Model</span>
+            <span class="stat-value font-mono" id="statModel">gpt-4o-mini</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ingest Document Dropzone -->
+      <div class="section-container">
+        <h2 class="section-title">Upload Knowledge</h2>
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept=".txt,.md,.pdf,.json,.csv" hidden>
+          <svg class="upload-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="dropzone-text"><strong>Click to upload</strong> or drag & drop</p>
+          <span class="dropzone-hint">PDF, TXT, MD, CSV, JSON</span>
+          <div class="upload-progress" id="uploadProgress"></div>
+        </div>
+
+        <!-- Quick Paste Text Accordion -->
+        <details class="paste-details">
+          <summary class="paste-summary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            <span>Or Paste Raw Text</span>
+          </summary>
+          <div class="paste-form">
+            <input type="text" id="pasteSourceName" placeholder="Document title (e.g. notes.txt)" class="input-field">
+            <textarea id="pasteTextContent" rows="4" placeholder="Paste notes, documentation or raw facts here..." class="textarea-field"></textarea>
+            <button id="btnPasteSubmit" class="btn-primary-small">Index Text Snippet</button>
+          </div>
+        </details>
+      </div>
+
+      <!-- Document Inventory List -->
+      <div class="section-container flex-grow">
+        <div class="section-header-row">
+          <h2 class="section-title">Indexed Sources</h2>
+          <button id="btnClearAll" class="btn-text-danger" title="Purge entire knowledge base">Purge All</button>
+        </div>
+        <div class="document-list" id="documentList">
+          <div class="empty-state">No documents indexed yet.</div>
+        </div>
+      </div>
+
+      <!-- Footer Info -->
+      <div class="sidebar-footer">
+        <a href="/docs" target="_blank" class="footer-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          Interactive API Swagger (/docs)
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Chat Workspace -->
+    <main class="chat-workspace">
+      <!-- Chat Header Bar -->
+      <header class="chat-topbar">
+        <div class="topbar-info">
+          <h2 class="topbar-title">RAG Context Assistant</h2>
+          <p class="topbar-desc">Questions are answered with verifiable citations from your private knowledge store.</p>
+        </div>
+        <div class="topbar-actions">
+          <div class="topbar-pill">
+            <span>Top-K:</span>
+            <select id="topKSelect" class="pill-select">
+              <option value="2">2 chunks</option>
+              <option value="4" selected>4 chunks</option>
+              <option value="6">6 chunks</option>
+              <option value="8">8 chunks</option>
+            </select>
+          </div>
+          <button id="btnNewChat" class="btn-secondary" title="Clear conversation history">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="1 4 1 10 7 10"/>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+            Reset Chat
+          </button>
+        </div>
+      </header>
+
+      <!-- Message Feed -->
+      <div class="chat-messages" id="chatMessages">
+        <!-- Welcome Message -->
+        <div class="message-row assistant">
+          <div class="avatar assistant-avatar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 16v-4"/>
+              <path d="M12 8h.01"/>
+            </svg>
+          </div>
+          <div class="message-bubble">
+            <div class="message-content">
+              <p>Hello! I am your <strong>Retrieval-Augmented Generation (RAG)</strong> assistant. I provide grounded answers strictly backed by your indexed knowledge base.</p>
+              <p>Try asking a question about the pre-loaded knowledge base or upload your own files in the left sidebar!</p>
+            </div>
+            <!-- Preset Quick Prompts -->
+            <div class="prompt-chips">
+              <button class="chip" data-prompt="What is Retrieval-Augmented Generation (RAG) and why is it useful?">What is RAG?</button>
+              <button class="chip" data-prompt="What are the differences between ChromaDB and FAISS?">ChromaDB vs FAISS</button>
+              <button class="chip" data-prompt="What are the two primary stages of a RAG pipeline?">RAG Pipeline Stages</button>
+              <button class="chip" data-prompt="What are the recommended best practices for production RAG?">Production Best Practices</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <footer class="chat-input-area">
+        <form class="input-form" id="chatForm">
+          <textarea
+            id="messageInput"
+            rows="1"
+            placeholder="Ask a question about your documents... (Enter to send, Shift+Enter for newline)"
+            autocomplete="off"
+          ></textarea>
+          <button type="submit" id="btnSend" class="btn-send" title="Send query">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </form>
+        <div class="input-footer-note">
+          Knowledge is retrieved using vector embeddings. Citations are linked directly to source passages.
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
